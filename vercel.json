@@ -1,28 +1,11 @@
 {
-  
-  "builds": [
-    {
-      "src": "public/index.html",
-      "use": "@vercel/static"
-    },
-        {
-      "src": "api/scan.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "api/scan.py",
-      "use": "@vercel/python"
+  "functions": {
+    "api/scan.py": {
+      "runtime": "python3.9"
     }
-  ],
+  },
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/public/$1"
-    }
+    { "src": "^/api/scan$", "dest": "/api/scan.py" },
+    { "src": "/(.*)", "dest": "/public/$1" }
   ]
-  
 }
