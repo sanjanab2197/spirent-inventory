@@ -1,10 +1,22 @@
 {
-  "buildCommand": "mkdir -p build && cp public/index.html build/",
-  "outputDirectory": "build",
   "builds": [
+    {
+      "src": "public/index.html",
+      "use": "@vercel/static"
+    },
     {
       "src": "api/scan.py",
       "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/public/$1"
     }
   ]
 }

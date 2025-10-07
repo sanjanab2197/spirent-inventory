@@ -1,7 +1,4 @@
 {
   "name": "spirent-inventory",
-  "version": "1.0.0",
-  "scripts": {
-    "build": "mkdir -p build && cp public/index.html build/"
-  }
+  "version": "1.0.0"
 }
