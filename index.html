@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spirent Scanner</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+      margin: 0;
+    }
+    
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    
+    h1 {
+      color: white;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    
+    .card {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+    
+    input {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      margin-bottom: 15px;
+    }
+    
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    
+    button:hover {
+      background: #5568d3;
+    }
+    
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    
+    .error {
+      background: #fee;
+      padding: 10px;
+      border-radius: 5px;
+      color: #c00;
+      margin-top: 10px;
+    }
+    
+    .results {
+      margin-top: 20px;
+    }
+    
+    .device {
+      background: #f0f0f0;
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 10px;
+      border-left: 4px solid #667eea;
+    }
+    
+    .device-ip {
+      font-weight: bold;
+      font-size: 18px;
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Spirent Device Scanner</h1>
+    
+    <div class="card">
+      <label>Enter Subnet:</label>
+      <input type="text" id="subnet" placeholder="172.26.196.0/24">
+      <button onclick="scanNetwork()">Scan Network</button>
+      <div id="error"></div>
+    </div>
+    
+    <div id="results"></div>
+  </div>
+
+  <script>
+    async function scanNetwork() {
+      const subnet = document.getElementById('subnet').value;
+      const errorDiv = document.getElementById('error');
+      const resultsDiv = document.getElementById('results');
+      
+      errorDiv.innerHTML = '';
+      resultsDiv.innerHTML = '';
+      
+      if (!subnet) {
+        errorDiv.innerHTML = '<div class="error">Please enter a subnet</div>';
+        return;
+      }
+      
+      document.querySelector('button').disabled = true;
+      document.querySelector('button').textContent = 'Scanning...';
+      
+      try {
+        const response = await fetch('/api/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subnet: subnet })
+        });
+        
+        const data = await response.json();
+        
+        if (data.spirent_devices && data.spirent_devices.length > 0) {
+          let html = '<div class="card"><h3>Found ' + data.spirent_devices.length + ' device(s)</h3><div class="results">';
+          data.spirent_devices.forEach(device => {
+            html += '<div class="device">';
+            html += '<div class="device-ip">' + device.ip + '</div>';
+            html += '<div>Ports: ' + device.ports.join(', ') + '</div>';
+            html += '</div>';
+          });
+          html += '</div></div>';
+          resultsDiv.innerHTML = html;
+        } else {
+          resultsDiv.innerHTML = '<div class="card">No devices found</div>';
+        }
+      } catch (err) {
+        errorDiv.innerHTML = '<div class="error">Scan failed: ' + err.message + '</div>';
+      }
+      
+      document.querySelector('button').disabled = false;
+      document.querySelector('button').textContent = 'Scan Network';
+    }
+  </script>
+</body>
+</html>

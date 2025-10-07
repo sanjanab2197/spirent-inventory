@@ -1,7 +1,6 @@
-
+from http.server import BaseHTTPRequestHandler
+import json
 import ipaddress
-import platform
-import subprocess
 import socket
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -12,7 +11,6 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 # ---------- CONFIG ----------
-PING_WORKERS = 100
 PROBE_WORKERS = 25
 
 ADMIN_USER = "admin"
@@ -27,36 +25,20 @@ HTTP_TIMEOUT = 3.0
 SPIRENT_INDICATORS = ("spirent", "testcenter", "stc", "spirenttestcenter")
 # ----------------------------
 
-def ping_ip(ip: str, ping_timeout_seconds: int = 1) -> bool:
-    """Ping a single IP, return True if reachable."""
-    system = platform.system().lower()
-    try:
-        if system == "linux":
-            cmd = ["ping", "-c", "1", "-W", str(int(ping_timeout_seconds)), ip]
-        elif system == "darwin":
-            cmd = ["ping", "-c", "1", "-W", str(int(ping_timeout_seconds * 1000)), ip]
-        else:
-            cmd = ["ping", "-n", "1", "-w", str(int(ping_timeout_seconds * 1000)), ip]
-        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return res.returncode == 0
-    except Exception:
-        return False
-
-def generate_hosts_from_user_input():
-    """Ask user for subnet or gateway/mask and return list of usable IPs."""
-    user_input = input("Enter subnet (CIDR, e.g., 172.26.196.0/24) or gateway + mask (e.g., 172.26.196.1 255.255.255.0): ").strip()
+def parse_subnet(user_input):
+    """Parse subnet or gateway/mask and return list of usable IPs."""
+    user_input = user_input.strip()
     if "/" in user_input:
         network = ipaddress.IPv4Network(user_input, strict=False)
     else:
         parts = user_input.split()
         if len(parts) != 2:
-            print("Invalid input format.")
-            exit(1)
+            raise ValueError("Invalid input format.")
         ip, mask = parts
         network = ipaddress.IPv4Network(f"{ip}/{mask}", strict=False)
     return [str(ip) for ip in network.hosts()]
 
-def port_is_open(ip: str, port: int, timeout: float = CONNECT_TIMEOUT) -> bool:
+def port_is_open(ip, port, timeout=CONNECT_TIMEOUT):
     """Check if a TCP port is open."""
     try:
         with socket.create_connection((ip, port), timeout=timeout):
@@ -64,7 +46,7 @@ def port_is_open(ip: str, port: int, timeout: float = CONNECT_TIMEOUT) -> bool:
     except Exception:
         return False
 
-def try_ssh_probe(ip: str, username: str, password: str):
+def try_ssh_probe(ip, username, password):
     """Attempt SSH login and run basic commands."""
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -88,7 +70,7 @@ def try_ssh_probe(ip: str, username: str, password: str):
         client.close()
     return "\n".join(output) if output else None
 
-def try_http_probe(ip: str, username: str, password: str):
+def try_http_probe(ip, username, password):
     """Try HTTP port 80 and look for Spirent indicators."""
     url = f"http://{ip}/"
     headers = {"User-Agent": "spirent-probe/1.0"}
@@ -101,7 +83,7 @@ def try_http_probe(ip: str, username: str, password: str):
         pass
     return False
 
-def probe_host(ip: str):
+def probe_host(ip):
     """Check SSH and HTTP for Spirent indicators."""
     info = {"ip": ip, "ports": [], "likely_spirent": False}
     open_ports = [p for p in PORTS_TO_CHECK if port_is_open(ip, p)]
@@ -120,12 +102,25 @@ def probe_host(ip: str):
 
     return info
 
-def main():
+def scan_network(subnet):
+    """Main scanning function."""
     start_time = time.time()
-    hosts = generate_hosts_from_user_input()
-    print(f"[+] Probing {len(hosts)} hosts for Spirent devices (SSH:22 / HTTP:80)...")
-
+    
+    try:
+        hosts = parse_subnet(subnet)
+    except Exception as e:
+        return {
+            "error": str(e),
+            "spirent_devices": [],
+            "logs": []
+        }
+    
+    logs = []
+    logs.append(f"[+] Probing {len(hosts)} hosts for Spirent devices (SSH:22 / HTTP:80)...")
+    
     results = []
+    detected_count = 0
+    
     with ThreadPoolExecutor(max_workers=PROBE_WORKERS) as ex:
         futures = {ex.submit(probe_host, ip): ip for ip in hosts}
         for fut in as_completed(futures):
@@ -133,19 +128,74 @@ def main():
                 r = fut.result()
                 results.append(r)
                 if r["likely_spirent"]:
-                    print(f"> Spirent detected: {r['ip']} (ports: {r['ports']})")
+                    detected_count += 1
+                    logs.append(f"> Spirent detected: {r['ip']} (ports: {r['ports']})")
             except Exception:
                 pass
 
     spirent_list = [r for r in results if r.get("likely_spirent")]
-    print("\nSummary - Likely Spirent devices:")
+    
+    logs.append("\nSummary - Likely Spirent devices:")
     if spirent_list:
         for s in spirent_list:
-            print(f" - {s['ip']} (ports: {s['ports']})")
+            logs.append(f" - {s['ip']} (ports: {s['ports']})")
     else:
-        print(" (none detected)")
+        logs.append(" (none detected)")
+    
+    scan_time = time.time() - start_time
+    logs.append(f"\nTotal time taken: {scan_time:.1f} seconds")
+    
+    return {
+        "spirent_devices": spirent_list,
+        "scan_time": f"{scan_time:.1f} seconds",
+        "total_hosts": len(hosts),
+        "logs": logs
+    }
 
-    print("\nTotal time taken: {:.1f} seconds".format(time.time() - start_time))
-
-if __name__ == "__main__":
-    main()
+class handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            
+            data = json.loads(post_data.decode('utf-8'))
+            subnet = data.get('subnet', '')
+            
+            if not subnet:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Subnet is required"}).encode())
+                return
+            
+            result = scan_network(subnet)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
+            
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            error_data = {"error": str(e), "type": "server_error"}
+            self.wfile.write(json.dumps(error_data).encode())
+    
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+        response = {"status": "API is running", "endpoint": "/api/scan", "method": "POST"}
+        self.wfile.write(json.dumps(response).encode())
+    
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()

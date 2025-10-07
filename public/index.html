@@ -3,229 +3,248 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Spirent Device Scanner</title>
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>Spirent Scanner</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+      margin: 0;
+    }
+    
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    
+    h1 {
+      color: white;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    
+    .card {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+    
+    input {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      margin-bottom: 15px;
+    }
+    
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    
+    button:hover {
+      background: #5568d3;
+    }
+    
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    
+    .error {
+      background: #fee;
+      padding: 10px;
+      border-radius: 5px;
+      color: #c00;
+      margin-top: 10px;
+    }
+    
+    .logs {
+      background: #f8f8f8;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      padding: 15px;
+      margin-top: 20px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+    
+    .logs-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #333;
+    }
+    
+    .results {
+      margin-top: 20px;
+    }
+    
+    .device {
+      background: #f0f0f0;
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 10px;
+      border-left: 4px solid #28a745;
+    }
+    
+    .device-ip {
+      font-weight: bold;
+      font-size: 18px;
+      margin-bottom: 5px;
+      font-family: 'Courier New', monospace;
+    }
+    
+    .summary {
+      background: #e8f4f8;
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 15px;
+      border-left: 4px solid #667eea;
+    }
+    
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
-  <div id="root"></div>
-  
-  <script type="text/babel">
-import React, { useState } from 'react';
-import { Search, Wifi, AlertCircle, CheckCircle, Loader, Network } from 'lucide-react';
-
-export default function SpirentScanner() {
-  const [subnet, setSubnet] = useState('');
-  const [scanning, setScanning] = useState(false);
-  const [results, setResults] = useState(null);
-  const [error, setError] = useState('');
-  const [progress, setProgress] = useState(0);
-
-  const validateSubnet = (input) => {
-    // CIDR format: 172.26.196.0/24
-    const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/;
-    // Gateway + Mask format: 172.26.196.1 255.255.255.0
-    const gatewayMaskRegex = /^(\d{1,3}\.){3}\d{1,3}\s+(\d{1,3}\.){3}\d{1,3}$/;
+  <div class="container">
+    <h1>🌐 Spirent Device Scanner</h1>
     
-    return cidrRegex.test(input.trim()) || gatewayMaskRegex.test(input.trim());
-  };
-
-  const handleScan = async () => {
-    if (!subnet.trim()) {
-      setError('Please enter a subnet');
-      return;
-    }
-
-    if (!validateSubnet(subnet)) {
-      setError('Invalid format. Use CIDR (e.g., 172.26.196.0/24) or Gateway + Mask (e.g., 172.26.196.1 255.255.255.0)');
-      return;
-    }
-
-    setError('');
-    setScanning(true);
-    setProgress(0);
-    setResults(null);
-
-    // Simulate progress
-    const progressInterval = setInterval(() => {
-      setProgress(prev => Math.min(prev + Math.random() * 15, 95));
-    }, 500);
-
-    try {
-      // Call your API endpoint
-      const response = await fetch('/api/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subnet: subnet.trim() })
-      });
-
-      clearInterval(progressInterval);
-      setProgress(100);
-
-      if (!response.ok) {
-        throw new Error('Scan failed');
-      }
-
-      const data = await response.json();
-      setResults(data);
-    } catch (err) {
-      clearInterval(progressInterval);
-      setError('Failed to scan network. Make sure the backend API is running.');
-      console.error(err);
-    } finally {
-      setScanning(false);
-    }
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !scanning) {
-      handleScan();
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <div className="flex items-center justify-center mb-4">
-            <Network className="w-12 h-12 text-purple-400 mr-3" />
-            <h1 className="text-4xl font-bold text-white">Spirent Device Scanner</h1>
-          </div>
-          <p className="text-purple-200 text-lg">
-            Discover Spirent TestCenter devices on your network
-          </p>
-        </div>
-
-        {/* Input Section */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl p-8 mb-8 border border-purple-500/20">
-          <label className="block text-white font-semibold mb-3 text-lg">
-            Network Subnet
-          </label>
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={subnet}
-              onChange={(e) => setSubnet(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="172.26.196.0/24 or 172.26.196.1 255.255.255.0"
-              className="flex-1 px-4 py-3 rounded-lg bg-white/90 border-2 border-purple-300 focus:border-purple-500 focus:outline-none text-gray-800 placeholder-gray-500"
-              disabled={scanning}
-            />
-            <button
-              onClick={handleScan}
-              disabled={scanning}
-              className="px-8 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white font-semibold rounded-lg transition-colors flex items-center gap-2 shadow-lg"
-            >
-              {scanning ? (
-                <>
-                  <Loader className="w-5 h-5 animate-spin" />
-                  Scanning...
-                </>
-              ) : (
-                <>
-                  <Search className="w-5 h-5" />
-                  Scan
-                </>
-              )}
-            </button>
-          </div>
-          
-          <p className="text-purple-200 text-sm mt-3">
-            💡 Enter subnet in CIDR notation (e.g., 172.26.196.0/24) or Gateway + Mask format
-          </p>
-
-          {error && (
-            <div className="mt-4 p-4 bg-red-500/20 border border-red-500 rounded-lg flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-              <p className="text-red-200">{error}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Progress Bar */}
-        {scanning && (
-          <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 mb-8 border border-purple-500/20">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-white font-medium">Scanning network...</span>
-              <span className="text-purple-300">{Math.round(progress)}%</span>
-            </div>
-            <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
-              <div
-                className="bg-gradient-to-r from-purple-500 to-pink-500 h-full transition-all duration-300 rounded-full"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Results Section */}
-        {results && (
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl p-8 border border-purple-500/20">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                <Wifi className="w-6 h-6 text-purple-400" />
-                Scan Results
-              </h2>
-              <span className="px-4 py-2 bg-purple-600 rounded-full text-white font-semibold">
-                {results.spirent_devices?.length || 0} devices found
-              </span>
-            </div>
-
-            {results.spirent_devices && results.spirent_devices.length > 0 ? (
-              <div className="space-y-4">
-                {results.spirent_devices.map((device, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-white/5 border border-green-500/30 rounded-lg p-5 hover:bg-white/10 transition-colors"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <CheckCircle className="w-5 h-5 text-green-400" />
-                          <span className="text-xl font-mono font-bold text-white">
-                            {device.ip}
-                          </span>
-                        </div>
-                        {device.ports && device.ports.length > 0 && (
-                          <div className="flex gap-2 flex-wrap">
-                            {device.ports.map((port) => (
-                              <span
-                                key={port}
-                                className="px-3 py-1 bg-purple-600/50 text-purple-100 rounded-full text-sm font-medium"
-                              >
-                                Port {port}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-300 text-lg">No Spirent devices detected on this network</p>
-              </div>
-            )}
-
-            {results.scan_time && (
-              <div className="mt-6 pt-6 border-t border-white/10 text-center">
-                <p className="text-purple-200">
-                  Scan completed in <span className="font-bold text-white">{results.scan_time}</span>
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+    <div class="card">
+      <label>Enter Subnet:</label>
+      <input type="text" id="subnet" placeholder="172.26.196.0/24 or 172.26.196.1 255.255.255.0">
+      <button onclick="scanNetwork()">Scan Network</button>
+      <div id="error"></div>
+      
+      <div id="logs-container" style="display: none;">
+        <div class="logs-title">Scan Logs:</div>
+        <div id="logs" class="logs"></div>
       </div>
     </div>
-  );
-}
+    
+    <div id="results"></div>
+  </div>
+
+  <script>
+    async function scanNetwork() {
+      const subnet = document.getElementById('subnet').value;
+      const errorDiv = document.getElementById('error');
+      const resultsDiv = document.getElementById('results');
+      const logsDiv = document.getElementById('logs');
+      const logsContainer = document.getElementById('logs-container');
+      
+      errorDiv.innerHTML = '';
+      resultsDiv.innerHTML = '';
+      logsDiv.innerHTML = '';
+      logsContainer.style.display = 'none';
+      
+      if (!subnet) {
+        errorDiv.innerHTML = '<div class="error">Please enter a subnet</div>';
+        return;
+      }
+      
+      document.querySelector('button').disabled = true;
+      document.querySelector('button').innerHTML = '<span class="spinner"></span>Scanning...';
+      
+      try {
+        const response = await fetch('/api/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subnet: subnet })
+        });
+        
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error('API returned status ' + response.status);
+        }
+        
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text();
+          throw new Error('API did not return JSON. Got: ' + text.substring(0, 100));
+        }
+        
+        const data = await response.json();
+        
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        
+        // Show logs
+        if (data.logs && data.logs.length > 0) {
+          logsContainer.style.display = 'block';
+          logsDiv.textContent = data.logs.join('\n');
+        }
+        
+        // Show results
+        let html = '<div class="card">';
+        
+        if (data.total_hosts) {
+          html += '<div class="summary">';
+          html += '<strong>Scan Summary:</strong><br>';
+          html += 'Total hosts scanned: ' + data.total_hosts + '<br>';
+          html += 'Spirent devices found: ' + (data.spirent_devices ? data.spirent_devices.length : 0) + '<br>';
+          if (data.scan_time) {
+            html += 'Time taken: ' + data.scan_time;
+          }
+          html += '</div>';
+        }
+        
+        if (data.spirent_devices && data.spirent_devices.length > 0) {
+          html += '<h3>Detected Spirent Devices:</h3><div class="results">';
+          data.spirent_devices.forEach(device => {
+            html += '<div class="device">';
+            html += '<div class="device-ip">✓ ' + device.ip + '</div>';
+            html += '<div>Open Ports: ' + device.ports.join(', ') + '</div>';
+            html += '</div>';
+          });
+          html += '</div>';
+        } else {
+          html += '<p style="text-align: center; color: #666;">No Spirent devices detected on this network.</p>';
+        }
+        
+        html += '</div>';
+        resultsDiv.innerHTML = html;
+        
+      } catch (err) {
+        errorDiv.innerHTML = '<div class="error">Error: ' + err.message + '<br><br>Make sure /api/scan is deployed correctly.</div>';
+        console.error('Full error:', err);
+      }
+      
+      document.querySelector('button').disabled = false;
+      document.querySelector('button').textContent = 'Scan Network';
+    }
   </script>
 </body>
 </html>
